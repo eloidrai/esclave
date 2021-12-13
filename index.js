@@ -15,11 +15,8 @@ class Grid {
 			['😀','😃','😄'],
 			['😀','😃','😄']
 		]
-		this.p1 = '😈';
-		this.p3 = '🐻';
 		this.channel = channel;
 		this.messages = [];
-		this.createGrid().then(r=>this.setCell(0,0,this.p1)).then(console.log);
 	}
 
 	async createGrid() {
@@ -29,7 +26,6 @@ class Grid {
 				const r = await this.messages[y].react(emoji);
 			}
 		}
-		return this.messages;
 	}
 
 	async getCell (x, y) {
@@ -40,27 +36,60 @@ class Grid {
 		this.grid[y][x] = newEmoji;
 		this.messages[y].reactions.removeAll();
 		for (const emoji of this.grid[y]) {
-			const r = await this.messages[y].react(emoji);
+			await this.messages[y].react(emoji);
 		}
+	}
+
+	async getCoords (reaction) {
+		const y = this.messages.findIndex(m => m.id == reaction.message.id);
+		const x = this.grid[y].indexOf(reaction.emoji.name);
+		return [x, y];
+	}
+}
+
+class Player {
+	constructor([id, user], emoji) {
+		this.user = user;
+		this.id = user.id;
+		this.emoji = emoji;
 	}
 }
 
 class TicTacToe {
-	constructor(player1, player2, channel) {
-		this.players = [player1, player2];
-		this.player = player1;
+	constructor(client, channel, player1, player2) {
+		this.players = [new Player(player1, '😈')/*, new Player(player2, '🐻')*/];
+		this.currentPlayer = 0;
+
+		this.client = client;
 		this.channel = channel;
+
+		this.grid = new Grid(this.channel);
+		this.h = (r, u) => this.handle.call(this, r, u);  		// Règle le this de la méthode
+
+		this.grid.createGrid().then(() => {
+			this.client.on('messageReactionAdd', this.h);
+		})
 	}
 
-	// TODO
+	handle (reaction, user) {
+		// TODO : Ajouter une condition sur le message de la réaction
+		if (user.id == this.players[this.currentPlayer].id) {
+			console.log("Le joueur 0 vient de réagir");
+			this.grid.getCoords(reaction).then(([x, y]) => this.grid.setCell(x, y, this.players[this.currentPlayer].emoji))
+		}
 
+	}
+
+	cleanup () {
+		this.client.removeListener('messageReactionAdd', this.h)
+	}
 }
 
 client.on('messageCreate', async (msg) => {
-	if (msg.content.startsWith("ttt") && (msg.mentions.users.size == 2 || 1)) {
+	if (msg.content.startsWith("ttt") && (msg.mentions.users.size == 2 || true)) {
 		console.log("Let's play")
-	//	const play = new TicTacToe(...msg.mentions.users, msg.channel);
-		new Grid(msg.channel)
+		const players = [...msg.mentions.users]
+		const play = new TicTacToe(client, msg.channel, players[0], players[1]);
 	}
 })
 
