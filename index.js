@@ -1,3 +1,5 @@
+// TODO : Gérer le fait qu'un même émoji ne peut être utilisé qu'une fois par ligne + localité + modularité + algo
+
 require("dotenv").config()
 
 const { Client, Intents } = require('discord.js');
@@ -68,9 +70,14 @@ class TicTacToe {
 		this.grid = new Grid(this.channel);
 		this.h = (r, u) => this.handle.call(this, r, u);  		// Règle le this de la méthode
 
-		this.grid.createGrid().then(() => {
-			this.client.on('messageReactionAdd', this.h);
-		})
+		this.grid.createGrid()
+			.then(async () => {
+				this.playerDisplay = await this.channel.send(`Joueur actuel **${this.players[+this.currentPlayer].user.username}**`)
+			})
+			.then(() => {
+				this.client.on('messageReactionAdd', this.h);
+			})
+
 	}
 
 	handle (reaction, user) {
@@ -78,7 +85,10 @@ class TicTacToe {
 			console.log(`Le joueur ${+this.currentPlayer} vient de réagir`);
 			this.grid.getCoords(reaction)
 				.then(([x, y]) => this.grid.setCell(x, y, this.players[+this.currentPlayer].emoji))
-				.then(()=> (this.currentPlayer = !this.currentPlayer));
+				.then(() => {
+					this.currentPlayer = !this.currentPlayer
+					this.playerDisplay.edit(`Joueur actuel **${this.players[+this.currentPlayer].user.username}**`);
+				});
 		}
 
 	}
