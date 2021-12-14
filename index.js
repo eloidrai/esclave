@@ -57,8 +57,10 @@ class Player {
 
 class TicTacToe {
 	constructor(client, channel, player1, player2) {
-		this.players = [new Player(player1, '😈')/*, new Player(player2, '🐻')*/];
-		this.currentPlayer = 0;
+		this.players = [new Player(player1, '😈'), new Player(player2, '🐻')];
+		console.log(this.players)
+
+		this.currentPlayer = false;    // False = 0
 
 		this.client = client;
 		this.channel = channel;
@@ -72,10 +74,11 @@ class TicTacToe {
 	}
 
 	handle (reaction, user) {
-		// TODO : Ajouter une condition sur le message de la réaction
-		if (user.id == this.players[this.currentPlayer].id) {
-			console.log("Le joueur 0 vient de réagir");
-			this.grid.getCoords(reaction).then(([x, y]) => this.grid.setCell(x, y, this.players[this.currentPlayer].emoji))
+		if (user.id == this.players[+this.currentPlayer].id) {
+			console.log(`Le joueur ${+this.currentPlayer} vient de réagir`);
+			this.grid.getCoords(reaction)
+				.then(([x, y]) => this.grid.setCell(x, y, this.players[+this.currentPlayer].emoji))
+				.then(()=> (this.currentPlayer = !this.currentPlayer));
 		}
 
 	}
@@ -86,7 +89,7 @@ class TicTacToe {
 }
 
 client.on('messageCreate', async (msg) => {
-	if (msg.content.startsWith("ttt") && (msg.mentions.users.size == 2 || true)) {
+	if (msg.content.startsWith("ttt") && (msg.mentions.users.size == 2)) {
 		console.log("Let's play")
 		const players = [...msg.mentions.users]
 		const play = new TicTacToe(client, msg.channel, players[0], players[1]);
