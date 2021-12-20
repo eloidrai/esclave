@@ -1,4 +1,4 @@
-// TODO : Gérer le fait qu'un même émoji ne peut être utilisé qu'une fois par ligne + localité + modularité + algo
+// TODO : empecher de jouer la même case que le joueur précédent, reréfléchir à tout
 
 require("dotenv").config();
 
@@ -96,7 +96,7 @@ class Player {
 class TicTacToe {
   constructor(client, channel, player1, player2) {
     this.players = [
-      new Player(player1, ["🍊", "🍉", "🍅", "🍑", "🍎"]),
+      new Player(player1, ["🍉", "🍅", "🍑", "🍎", "🍊"]),
       new Player(player2, ["🐒", "🙈", "🙊", "🙉", "🐵"]),
     ];
 
@@ -127,13 +127,19 @@ class TicTacToe {
       console.log(`Le joueur ${+this.currentPlayer} vient de réagir`);
       const coords = this.grid.getCoords(reaction);
       this.grid.setCell(...coords, this.players[+this.currentPlayer].getEmoji())
-        .then(() => console.log("Winner :", this.grid.checkForWinner()))
+        .then(() => {
+          const winner = this.grid.checkForWinner();
+          if (winner) {
+            reaction.message.reply(`Le joueur **${winner.user.username}${winner.emojis[0]}** a gagné`);
+            this.cleanup();
+          }
+        })
         .then(() => {
           this.currentPlayer = !this.currentPlayer;
           this.playerDisplay.edit(
             `Joueur actuel **${
               this.players[+this.currentPlayer].user.username
-            }**`
+            }** ${this.players[+this.currentPlayer].emojis[0]}`
           );
         });
     }
