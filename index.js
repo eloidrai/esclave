@@ -1,5 +1,3 @@
-// TODO : empecher de jouer la même case que le joueur précédent, reréfléchir à tout
-
 require("dotenv").config();
 
 const { Client, Intents } = require("discord.js");
@@ -16,7 +14,7 @@ client.once("ready", () => {
 });
 
 function range(n) {
-  return (new Array(n)).fill().map((_, i) => i);
+  return new Array(n).fill().map((_, i) => i);
 }
 
 class Grid {
@@ -40,12 +38,16 @@ class Grid {
     }
   }
 
-  checkForWinner () {
-    console.log("Checking : ")
-    for (const line of [...this.grid, ...range(3).map(y => this.getColumn(y)), ...this.getDiagonals()]) {
-      console.log(line, this.players[0].emojis, this.players[1].emojis)
-      if (line.every(emoji => this.players[0].emojis.includes(emoji))) return this.players[0];
-      if (line.every(emoji => this.players[1].emojis.includes(emoji))) return this.players[1];
+  checkForWinner() {
+    for (const line of [
+      ...this.grid,
+      ...range(3).map((y) => this.getColumn(y)),
+      ...this.getDiagonals(),
+    ]) {
+      if (line.every((emoji) => this.players[0].emojis.includes(emoji)))
+        return this.players[0];
+      if (line.every((emoji) => this.players[1].emojis.includes(emoji)))
+        return this.players[1];
     }
     return null;
   }
@@ -54,15 +56,15 @@ class Grid {
     return [...this.messages[y].reactions.cache.keys()][x];
   }
 
-  getColumn (x) {
-    return range(3).map(y => this.grid[y][x]);
+  getColumn(x) {
+    return range(3).map((y) => this.grid[y][x]);
   }
 
-  getDiagonals () {
+  getDiagonals() {
     return [
-      range(3).map(c => this.grid[c][c]),
-      range(3).map(c => this.grid[c][2-c]),
-    ]
+      range(3).map((c) => this.grid[c][c]),
+      range(3).map((c) => this.grid[c][2 - c]),
+    ];
   }
 
   async setCell(x, y, newEmoji) {
@@ -89,7 +91,7 @@ class Player {
   }
 
   getEmoji() {
-    return this.emojis[this.emojiIndex++]
+    return this.emojis[this.emojiIndex++];
   }
 }
 
@@ -106,41 +108,60 @@ class TicTacToe {
     this.channel = channel;
     this.count = 0;
 
-
     this.grid = new Grid(this.channel, this.players);
     this.h = (r, u) => this.handle.call(this, r, u); // Règle le this de la méthode
+    this.lock = true;
 
     this.grid
       .createGrid()
       .then(async () => {
         this.playerDisplay = await this.channel.send(
-          `Joueur actuel **${this.players[+this.currentPlayer].user.username}**`
+          `Joueur actuel **${
+            this.players[+this.currentPlayer].user.username
+          } ** ${this.players[+this.currentPlayer].emojis[0]}`
         );
       })
       .then(() => {
         this.client.on("messageReactionAdd", this.h);
+        this.lock = false;
       });
   }
 
   handle(reaction, user) {
-    if (user.id == this.players[+this.currentPlayer].id && this.grid.messages.map(m => m.id).includes(reaction.message.id)) {
+    if (
+      this.lock ||
+      !["😀", "😃", "😄"].includes(reaction.emoji.name) ||
+      user.id == client.id
+    ) {
+      return;
+    }
+    console.log(reaction.emoji.name);
+    this.lock = true;
+    if (
+      user.id == this.players[+this.currentPlayer].id &&
+      this.grid.messages.map((m) => m.id).includes(reaction.message.id)
+    ) {
       console.log(`Le joueur ${+this.currentPlayer} vient de réagir`);
       const coords = this.grid.getCoords(reaction);
-      this.grid.setCell(...coords, this.players[+this.currentPlayer].getEmoji())
-        .then(() => {
+      this.grid
+        .setCell(...coords, this.players[+this.currentPlayer].getEmoji())
+        .then(async () => {
           const winner = this.grid.checkForWinner();
           if (winner) {
-            reaction.message.reply(`Le joueur **${winner.user.username}${winner.emojis[0]}** a gagné`);
+            await reaction.message.reply(
+              `Le joueur **${winner.user.username}${winner.emojis[0]}** a gagné`
+            );
             this.cleanup();
           }
         })
-        .then(() => {
+        .then(async () => {
           this.currentPlayer = !this.currentPlayer;
-          this.playerDisplay.edit(
+          await this.playerDisplay.edit(
             `Joueur actuel **${
               this.players[+this.currentPlayer].user.username
             }** ${this.players[+this.currentPlayer].emojis[0]}`
           );
+          this.lock = false;
         });
     }
   }
