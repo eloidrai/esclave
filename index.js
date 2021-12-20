@@ -33,23 +33,17 @@ class Grid {
     for (let y = 0; y < 3; y++) {
       this.messages.push(await this.channel.send("."));
       for (const emoji of this.grid[y]) {
-        const r = await this.messages[y].react(emoji);
+        await this.messages[y].react(emoji);
       }
     }
   }
 
-  checkForWinner() {
-    for (const line of [
-      ...this.grid,
-      ...range(3).map((y) => this.getColumn(y)),
-      ...this.getDiagonals(),
-    ]) {
-      if (line.every((emoji) => this.players[0].emojis.includes(emoji)))
-        return this.players[0];
-      if (line.every((emoji) => this.players[1].emojis.includes(emoji)))
-        return this.players[1];
+  async setCell(x, y, newEmoji) {
+    this.grid[y][x] = newEmoji;
+    this.messages[y].reactions.removeAll();
+    for (const emoji of this.grid[y]) {
+      await this.messages[y].react(emoji);
     }
-    return null;
   }
 
   getCell(x, y) {
@@ -65,14 +59,6 @@ class Grid {
       range(3).map((c) => this.grid[c][c]),
       range(3).map((c) => this.grid[c][2 - c]),
     ];
-  }
-
-  async setCell(x, y, newEmoji) {
-    this.grid[y][x] = newEmoji;
-    this.messages[y].reactions.removeAll();
-    for (const emoji of this.grid[y]) {
-      await this.messages[y].react(emoji);
-    }
   }
 
   getCoords(reaction) {
@@ -109,60 +95,64 @@ class TicTacToe {
     this.count = 0;
 
     this.grid = new Grid(this.channel, this.players);
-    this.h = (r, u) => this.handle.call(this, r, u); // Règle le this de la méthode
-    this.lock = true;
 
-    this.grid
-      .createGrid()
-      .then(async () => {
-        this.playerDisplay = await this.channel.send(
-          `Joueur actuel **${
-            this.players[+this.currentPlayer].user.username
-          } ** ${this.players[+this.currentPlayer].emojis[0]}`
-        );
-      })
-      .then(() => {
-        this.client.on("messageReactionAdd", this.h);
-        this.lock = false;
-      });
+    (async () => {
+      this.lock = true;
+      await this.grid.createGrid();
+      this.playerDisplay = await this.channel.send(
+        `Joueur actuel **${
+          this.players[+this.currentPlayer].user.username
+        } ** ${this.players[+this.currentPlayer].emojis[0]}`
+      );
+      this.h = (r, u) => this.handle(r, u);
+      this.client.on("messageReactionAdd", this.h);
+      this.lock = false;
+    })();
   }
 
-  handle(reaction, user) {
+  async handle(reaction, user) {
     if (
       this.lock ||
+      !this.grid.messages.map((m) => m.id).includes(reaction.message.id) ||
       !["😀", "😃", "😄"].includes(reaction.emoji.name) ||
-      user.id == client.user.id
-    ) {
+      user.id != this.players[+this.currentPlayer].id
+    )
       return;
+    this.lock = true;
+    const coords = this.grid.getCoords(reaction);
+    await this.grid.setCell(
+      ...coords,
+      this.players[+this.currentPlayer].getEmoji()
+    );
+    this.currentPlayer = !this.currentPlayer;
+    await this.playerDisplay.edit(
+      `Joueur actuel **${this.players[+this.currentPlayer].user.username}** ${
+        this.players[+this.currentPlayer].emojis[0]
+      }`
+    );
+    this.lock = false;
+    const winner = this.checkForWinner();
+    if (winner) {
+      await reaction.message.reply(
+        `Le joueur **${winner.user.username} ${winner.emojis[0]}** a gagné !`
+      );
+      await this.playerDisplay.delete();
+      this.cleanup();
     }
-    if (
-      user.id == this.players[+this.currentPlayer].id &&
-      this.grid.messages.map((m) => m.id).includes(reaction.message.id)
-    ) {
-      console.log(`Le joueur ${+this.currentPlayer} vient de jouer`);
-      this.lock = true;
-      const coords = this.grid.getCoords(reaction);
-      this.grid
-        .setCell(...coords, this.players[+this.currentPlayer].getEmoji())
-        .then(async () => {
-          const winner = this.grid.checkForWinner();
-          if (winner) {
-            await reaction.message.reply(
-              `Le joueur **${winner.user.username}${winner.emojis[0]}** a gagné`
-            );
-            this.cleanup();
-          }
-        })
-        .then(async () => {
-          this.currentPlayer = !this.currentPlayer;
-          await this.playerDisplay.edit(
-            `Joueur actuel **${
-              this.players[+this.currentPlayer].user.username
-            }** ${this.players[+this.currentPlayer].emojis[0]}`
-          );
-          this.lock = false;
-        });
+  }
+
+  checkForWinner() {
+    for (const line of [
+      ...this.grid.grid,
+      ...range(3).map((y) => this.grid.getColumn(y)),
+      ...this.grid.getDiagonals(),
+    ]) {
+      if (line.every((emoji) => this.players[0].emojis.includes(emoji)))
+        return this.players[0];
+      if (line.every((emoji) => this.players[1].emojis.includes(emoji)))
+        return this.players[1];
     }
+    return null;
   }
 
   cleanup() {
@@ -172,9 +162,8 @@ class TicTacToe {
 
 client.on("messageCreate", async (msg) => {
   if (msg.content.startsWith("ttt") && msg.mentions.users.size == 2) {
-    console.log("Let's play");
     const players = [...msg.mentions.users];
-    const play = new TicTacToe(client, msg.channel, players[0], players[1]);
+    const game = new TicTacToe(client, msg.channel, players[0], players[1]);
   }
 });
 
