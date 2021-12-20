@@ -131,17 +131,16 @@ class TicTacToe {
     if (
       this.lock ||
       !["😀", "😃", "😄"].includes(reaction.emoji.name) ||
-      user.id == client.id
+      user.id == client.user.id
     ) {
       return;
     }
-    console.log(reaction.emoji.name);
-    this.lock = true;
     if (
       user.id == this.players[+this.currentPlayer].id &&
       this.grid.messages.map((m) => m.id).includes(reaction.message.id)
     ) {
-      console.log(`Le joueur ${+this.currentPlayer} vient de réagir`);
+      console.log(`Le joueur ${+this.currentPlayer} vient de jouer`);
+      this.lock = true;
       const coords = this.grid.getCoords(reaction);
       this.grid
         .setCell(...coords, this.players[+this.currentPlayer].getEmoji())
