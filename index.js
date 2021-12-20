@@ -15,13 +15,18 @@ client.once("ready", () => {
   console.log("Ready!");
 });
 
+function range(n) {
+  return (new Array(n)).fill().map((_, i) => i);
+}
+
 class Grid {
-  constructor(channel) {
+  constructor(channel, players) {
     this.grid = [
       ["😀", "😃", "😄"],
       ["😀", "😃", "😄"],
       ["😀", "😃", "😄"],
     ];
+    this.players = players;
     this.channel = channel;
     this.messages = [];
   }
@@ -35,8 +40,29 @@ class Grid {
     }
   }
 
-  async getCell(x, y) {
+  checkForWinner () {
+    console.log("Checking : ")
+    for (const line of [...this.grid, ...range(3).map(y => this.getColumn(y)), ...this.getDiagonals()]) {
+      console.log(line, this.players[0].emojis, this.players[1].emojis)
+      if (line.every(emoji => this.players[0].emojis.includes(emoji))) return this.players[0];
+      if (line.every(emoji => this.players[1].emojis.includes(emoji))) return this.players[1];
+    }
+    return null;
+  }
+
+  getCell(x, y) {
     return [...this.messages[y].reactions.cache.keys()][x];
+  }
+
+  getColumn (x) {
+    return range(3).map(y => this.grid[y][x]);
+  }
+
+  getDiagonals () {
+    return [
+      range(3).map(c => this.grid[c][c]),
+      range(3).map(c => this.grid[c][2-c]),
+    ]
   }
 
   async setCell(x, y, newEmoji) {
@@ -47,7 +73,7 @@ class Grid {
     }
   }
 
-  async getCoords(reaction) {
+  getCoords(reaction) {
     const y = this.messages.findIndex((m) => m.id == reaction.message.id);
     const x = this.grid[y].indexOf(reaction.emoji.name);
     return [x, y];
@@ -59,6 +85,11 @@ class Player {
     this.user = user;
     this.id = user.id;
     this.emojis = emojis;
+    this.emojiIndex = 0;
+  }
+
+  getEmoji() {
+    return this.emojis[this.emojiIndex++]
   }
 }
 
@@ -68,14 +99,15 @@ class TicTacToe {
       new Player(player1, ["🍊", "🍉", "🍅", "🍑", "🍎"]),
       new Player(player2, ["🐒", "🙈", "🙊", "🙉", "🐵"]),
     ];
-    console.log(this.players);
 
     this.currentPlayer = false; // False = 0
 
     this.client = client;
     this.channel = channel;
+    this.count = 0;
 
-    this.grid = new Grid(this.channel);
+
+    this.grid = new Grid(this.channel, this.players);
     this.h = (r, u) => this.handle.call(this, r, u); // Règle le this de la méthode
 
     this.grid
@@ -91,17 +123,11 @@ class TicTacToe {
   }
 
   handle(reaction, user) {
-    if (user.id == this.players[+this.currentPlayer].id) {
+    if (user.id == this.players[+this.currentPlayer].id && this.grid.messages.map(m => m.id).includes(reaction.message.id)) {
       console.log(`Le joueur ${+this.currentPlayer} vient de réagir`);
-      this.grid
-        .getCoords(reaction)
-        .then(([x, y]) =>
-          this.grid.setCell(
-            x,
-            y,
-            this.players[+this.currentPlayer].emojis.pop()
-          )
-        )
+      const coords = this.grid.getCoords(reaction);
+      this.grid.setCell(...coords, this.players[+this.currentPlayer].getEmoji())
+        .then(() => console.log("Winner :", this.grid.checkForWinner()))
         .then(() => {
           this.currentPlayer = !this.currentPlayer;
           this.playerDisplay.edit(
